@@ -22,6 +22,7 @@
 #include <signal.h>
 
 #include "easymedia/buffer.h"
+#include "easymedia/control.h"
 #include "easymedia/flow.h"
 #include "easymedia/key_string.h"
 #include "easymedia/utils.h"
@@ -68,7 +69,7 @@ private:
 };
 
 const std::string N4DataFlow::drm_dev_path("/dev/dri/card0");
-const std::string N4DataFlow::n4_data_type(IMAGE_NV16); // IMAGE_YUYV422
+const std::string N4DataFlow::n4_data_type(IMAGE_YUYV422);
 std::vector<std::string> N4DataFlow::n4_dev_paths = {
     "/dev/video0", "/dev/video1", "/dev/video2", "/dev/video3"};
 std::vector<ImageRect> N4DataFlow::n4_src_rects = {
@@ -79,16 +80,22 @@ std::vector<ImageRect> N4DataFlow::n4_dst_rects = {{0, 0, 1280, 720},
                                                    {1280, 720, 1280, 720}};
 
 N4DataFlow::N4DataFlow() {
+  std::string v4l2_data_type;
+  std::string rga_in_data_type;
   std::string rga_out_data_type;
   std::string drm_data_type;
-  size_t drm_w_factor = 1;
+  size_t w_factor = 1;
   if (n4_data_type == IMAGE_NV16) {
+    v4l2_data_type = IMAGE_NV16;
+    rga_in_data_type = IMAGE_NV16;
     rga_out_data_type = IMAGE_RGB888;
     drm_data_type = IMAGE_RGB888;
   } else if (n4_data_type == IMAGE_YUYV422) {
+    v4l2_data_type = IMAGE_RGB332;
+    rga_in_data_type = IMAGE_RGB565;
     rga_out_data_type = IMAGE_RGB565; // assert(src w/h == dst w/h);
     drm_data_type = IMAGE_RGB332;
-    drm_w_factor = 2;
+    w_factor = 2;
   } else {
     abort();
   }
@@ -107,8 +114,9 @@ N4DataFlow::N4DataFlow() {
     PARAM_STRING_APPEND(v4l2_param, KEY_V4L2_MEM_TYPE,
                         KEY_V4L2_M_TYPE(MEMORY_MMAP));
     PARAM_STRING_APPEND_TO(v4l2_param, KEY_FRAMES, 4);
-    PARAM_STRING_APPEND(v4l2_param, KEY_OUTPUTDATATYPE, n4_data_type);
-    PARAM_STRING_APPEND_TO(v4l2_param, KEY_BUFFER_WIDTH, n4_src_rects[i].w);
+    PARAM_STRING_APPEND(v4l2_param, KEY_OUTPUTDATATYPE, v4l2_data_type);
+    PARAM_STRING_APPEND_TO(v4l2_param, KEY_BUFFER_WIDTH,
+                           (n4_src_rects[i].w * w_factor));
     PARAM_STRING_APPEND_TO(v4l2_param, KEY_BUFFER_HEIGHT, n4_src_rects[i].h);
     param.append(v4l2_param);
     auto n = easymedia::REFLECTOR(Flow)::Create<easymedia::Flow>(
@@ -120,6 +128,8 @@ N4DataFlow::N4DataFlow() {
     n4.push_back(n);
   }
 
+  fprintf(stderr, "init n4 camera successfully\n");
+
   do {
     flow_name = "filter";
     std::string filter_name("rkrga");
@@ -129,7 +139,7 @@ N4DataFlow::N4DataFlow() {
     PARAM_STRING_APPEND_TO(param, KEY_FPS, drm_fps);
     PixelFormat rga_out_pix_fmt = GetPixFmtByString(rga_out_data_type.c_str());
     ImageInfo out_img_info = {rga_out_pix_fmt, drm_w, drm_h, drm_w, drm_h};
-    PARAM_STRING_APPEND(param, KEY_INPUTDATATYPE, n4_data_type);
+    PARAM_STRING_APPEND(param, KEY_INPUTDATATYPE, rga_in_data_type);
     param.append(easymedia::to_param_string(out_img_info, false));
     param.append(" ");
     std::string rga_param;
@@ -147,6 +157,8 @@ N4DataFlow::N4DataFlow() {
     }
   } while (0);
 
+  fprintf(stderr, "init rga successfully\n");
+
   do {
     flow_name = "output_stream";
     stream_name = "drm_output_stream";
@@ -157,7 +169,7 @@ N4DataFlow::N4DataFlow() {
     std::string drm_param;
     PARAM_STRING_APPEND(drm_param, KEY_DEVICE, drm_dev_path);
     PARAM_STRING_APPEND(drm_param, KEY_OUTPUTDATATYPE, drm_data_type);
-    PARAM_STRING_APPEND_TO(drm_param, KEY_BUFFER_WIDTH, (drm_w * drm_w_factor));
+    PARAM_STRING_APPEND_TO(drm_param, KEY_BUFFER_WIDTH, (drm_w * w_factor));
     PARAM_STRING_APPEND_TO(drm_param, KEY_BUFFER_HEIGHT, drm_h);
     param.append(drm_param);
     drm = easymedia::REFLECTOR(Flow)::Create<easymedia::Flow>(flow_name.c_str(),
@@ -166,6 +178,26 @@ N4DataFlow::N4DataFlow() {
       fprintf(stderr, "Create flow %s failed\n", flow_name.c_str());
       return;
     }
+    if (drm_data_type == IMAGE_RGB332) {
+      easymedia::DRMPropertyArg arg = {"WORK_MODE", 1};
+      if (drm->Control(easymedia::S_CRTC_PROPERTY, &arg)) {
+        errno = -EINVAL;
+        return;
+      }
+      arg.name = "PDAF_TYPE";
+      arg.value = 2;
+      if (drm->Control(easymedia::S_CRTC_PROPERTY, &arg)) {
+        errno = -EINVAL;
+        return;
+      }
+      arg.name = "CSI-TX-PATH";
+      arg.value = 0;
+      if (drm->Control(easymedia::S_CONNECTOR_PROPERTY, &arg)) {
+        errno = -EINVAL;
+        return;
+      }
+    }
+    fprintf(stderr, "init drm successfully\n");
     rga->AddDownFlow(drm, 0, 0);
   } while (0);
 
