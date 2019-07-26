@@ -136,16 +136,18 @@ int N4DataFlow::StreamOn(int index) {
     param.append(v4l2_param);
     auto n = easymedia::REFLECTOR(Flow)::Create<easymedia::Flow>(
         flow_name.c_str(), param.c_str());
-    if (!n || errno) {
+    if (!n) {
       fprintf(stderr, "[camid=%d]Create flow %s failed\n", n4_dev_indexs[index],
               flow_name.c_str());
       return -1;
     }
     n4[index] = n;
   } while (0);
-
-  if (index < 3)
-    return 0;
+  fprintf(stderr, "init camera successfully, index=%d<%s>\n", index, n4_dev_paths[index].c_str());
+  for (auto n : n4) {
+    if (!n)
+      return 0;
+  }
   fprintf(stderr, "init n4 camera successfully\n");
   // the final camera, calculate the draw final dst rects
   ImageRect &dst_rect = n4_dst_rects[0];
@@ -198,7 +200,7 @@ int N4DataFlow::StreamOn(int index) {
     param.append(rga_param);
     rga = easymedia::REFLECTOR(Flow)::Create<easymedia::Flow>(flow_name.c_str(),
                                                               param.c_str());
-    if (!rga || errno) {
+    if (!rga) {
       fprintf(stderr, "Create flow %s failed\n", flow_name.c_str());
       return -1;
     }
@@ -221,7 +223,7 @@ int N4DataFlow::StreamOn(int index) {
     param.append(drm_param);
     drm = easymedia::REFLECTOR(Flow)::Create<easymedia::Flow>(flow_name.c_str(),
                                                               param.c_str());
-    if (!drm || errno) {
+    if (!drm) {
       fprintf(stderr, "Create flow %s failed\n", flow_name.c_str());
       return -1;
     }
@@ -276,16 +278,20 @@ bool N4DataFlow::InitCapture(int index, __u8 cam_id) {
 int N4DataFlow::IoCtrl(__u8 cam_id, __u32 type, void *param) {
   int first_slot = -1;
   int found_slot = -1;
+  int index = 0;
+  fprintf(stderr, "IoCtrl cam_id=%d, type=0x%08x\n", (int)cam_id, (int)type);
   for (int i : n4_dev_indexs) {
     if (i == cam_id) {
       first_slot = -1;
-      found_slot = i;
+      found_slot = index++;
       break;
     }
-    if (i < 0)
-      first_slot = i;
+    if (i < 0 && first_slot < 0)
+      first_slot = index;
+    index++;
   }
   if (first_slot >= 0) {
+    fprintf(stderr, "first_slot=%d\n", first_slot);
     if (!InitCapture(first_slot, cam_id))
       return -1;
     found_slot = first_slot;
@@ -303,6 +309,7 @@ int N4DataFlow::IoCtrl(__u8 cam_id, __u32 type, void *param) {
     rect.h = fmt->fmt.pix.height;
   } break;
   case VIDIOC_STREAMON: {
+    fprintf(stderr, "found_slot=%d\n", found_slot);
     return StreamOn(found_slot);
   }
   default:
