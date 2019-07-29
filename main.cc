@@ -143,7 +143,8 @@ int N4DataFlow::StreamOn(int index) {
     }
     n4[index] = n;
   } while (0);
-  fprintf(stderr, "init camera successfully, index=%d<%s>\n", index, n4_dev_paths[index].c_str());
+  fprintf(stderr, "init camera successfully, index=%d<%s>\n", index,
+          n4_dev_paths[index].c_str());
   for (auto n : n4) {
     if (!n)
       return 0;
@@ -190,14 +191,12 @@ int N4DataFlow::StreamOn(int index) {
     ImageInfo out_img_info = {rga_out_pix_fmt, drm_w, drm_h, drm_w, drm_h};
     PARAM_STRING_APPEND(param, KEY_INPUTDATATYPE, rga_in_data_type);
     param.append(easymedia::to_param_string(out_img_info, false));
-    param.append(" ");
-    std::string rga_param;
     for (int i = 0; i < n4.size(); i++) {
+      param.append(" ");
       std::vector<ImageRect> v = {n4_src_rects[i], n4_dst_rects[i]};
-      PARAM_STRING_APPEND(rga_param, KEY_BUFFER_RECT,
+      PARAM_STRING_APPEND(param, KEY_BUFFER_RECT,
                           easymedia::TwoImageRectToString(v));
     }
-    param.append(rga_param);
     rga = easymedia::REFLECTOR(Flow)::Create<easymedia::Flow>(flow_name.c_str(),
                                                               param.c_str());
     if (!rga) {
