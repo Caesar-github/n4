@@ -20,7 +20,9 @@
  */
 
 #include <assert.h>
+#include <fcntl.h>
 #include <signal.h>
+#include <unistd.h>
 
 extern "C" {
 #include <linux/rk-npu-usb-msg.h>
@@ -151,29 +153,29 @@ int N4DataFlow::StreamOn(int index) {
   }
   fprintf(stderr, "init n4 camera successfully\n");
   // the final camera, calculate the draw final dst rects
-  ImageRect &dst_rect = n4_dst_rects[0];
-  dst_rect.x = 0;
-  dst_rect.y = 0;
-  dst_rect.w = n4_src_rects[0].w;
-  dst_rect.h = n4_src_rects[0].h;
+  ImageRect *dst_rect = &n4_dst_rects[0];
+  dst_rect->x = 0;
+  dst_rect->y = 0;
+  dst_rect->w = n4_src_rects[0].w;
+  dst_rect->h = n4_src_rects[0].h;
 
-  dst_rect = n4_dst_rects[1];
-  dst_rect.x = n4_dst_rects[0].w;
-  dst_rect.y = 0;
-  dst_rect.w = n4_src_rects[1].w;
-  dst_rect.h = n4_src_rects[1].h;
+  dst_rect = &n4_dst_rects[1];
+  dst_rect->x = n4_dst_rects[0].w;
+  dst_rect->y = 0;
+  dst_rect->w = n4_src_rects[1].w;
+  dst_rect->h = n4_src_rects[1].h;
 
-  dst_rect = n4_dst_rects[2];
-  dst_rect.x = 0;
-  dst_rect.y = std::max<int>(n4_dst_rects[0].h, n4_dst_rects[1].h);
-  dst_rect.w = n4_src_rects[2].w;
-  dst_rect.h = n4_src_rects[2].h;
+  dst_rect = &n4_dst_rects[2];
+  dst_rect->x = 0;
+  dst_rect->y = std::max<int>(n4_dst_rects[0].h, n4_dst_rects[1].h);
+  dst_rect->w = n4_src_rects[2].w;
+  dst_rect->h = n4_src_rects[2].h;
 
-  dst_rect = n4_dst_rects[3];
-  dst_rect.x = n4_dst_rects[2].w;
-  dst_rect.y = n4_dst_rects[2].y;
-  dst_rect.w = n4_src_rects[3].w;
-  dst_rect.h = n4_src_rects[3].h;
+  dst_rect = &n4_dst_rects[3];
+  dst_rect->x = n4_dst_rects[2].w;
+  dst_rect->y = n4_dst_rects[2].y;
+  dst_rect->w = n4_src_rects[3].w;
+  dst_rect->h = n4_src_rects[3].h;
 
   drm_w = std::max<int>(n4_dst_rects[0].w + n4_dst_rects[1].w,
                         n4_dst_rects[2].w + n4_dst_rects[3].w);
@@ -194,6 +196,10 @@ int N4DataFlow::StreamOn(int index) {
     for (int i = 0; i < n4.size(); i++) {
       param.append(" ");
       std::vector<ImageRect> v = {n4_src_rects[i], n4_dst_rects[i]};
+      fprintf(stderr, "[%d]: %d,%d-%d,%d -> %d,%d-%d,%d\n", i,
+              n4_src_rects[i].x, n4_src_rects[i].y, n4_src_rects[i].w,
+              n4_src_rects[i].h, n4_dst_rects[i].x, n4_dst_rects[i].y,
+              n4_dst_rects[i].w, n4_dst_rects[i].h);
       PARAM_STRING_APPEND(param, KEY_BUFFER_RECT,
                           easymedia::TwoImageRectToString(v));
     }
@@ -403,9 +409,14 @@ int main() {
   // signal(SIGINT, sigterm_handler);
 
   const char *tty_path = "/dev/ttyGS0";
-  int i = 0;
-  std::shared_ptr<N4DataFlow> n4;
 
+  fprintf(stderr, "wait %s connect...\n", tty_path);
+  // wait the tty connection
+  while (access(tty_path, R_OK))
+    easymedia::msleep(40);
+  fprintf(stderr, "%s connected and can be read\n", tty_path);
+
+  std::shared_ptr<N4DataFlow> n4;
   bool port_opened = false;
   struct sp_port *port = nullptr;
   sp_return sr = sp_get_port_by_name(tty_path, &port);
