@@ -25,7 +25,7 @@
 #include <unistd.h>
 
 extern "C" {
-#include <linux/rk-npu-usb-msg.h>
+#include <linux/rk-usbacm-msg.h>
 }
 
 #include "easymedia/buffer.h"
