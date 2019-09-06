@@ -110,10 +110,10 @@ int N4DataFlow::StreamOn(int index) {
 
   // must be yuyv
   v4l2_data_type = n4_data_type;
-  rga_in_data_type = IMAGE_RGB565;
-  rga_out_data_type = IMAGE_RGB565; // assert(src w/h == dst w/h);
+  rga_in_data_type = IMAGE_ARGB8888;
+  rga_out_data_type = IMAGE_ABGR8888; // assert(src w/h == dst w/h);
   drm_data_type = IMAGE_RGB332;
-  w_factor = 2;
+  w_factor = 4;
 
   std::string flow_name("source_stream");
   std::string stream_name("v4l2_capture_stream");
@@ -152,6 +152,15 @@ int N4DataFlow::StreamOn(int index) {
       return 0;
   }
   fprintf(stderr, "init n4 camera successfully\n");
+  n4_src_rects[0].w /= 2;
+  n4_src_rects[1].x /= 2;
+  n4_src_rects[1].w /= 2;
+  n4_src_rects[2].y /= 2;
+  n4_src_rects[2].w /= 2;
+  n4_src_rects[3].x /= 2;
+  n4_src_rects[3].y /= 2;
+  n4_src_rects[3].w /= 2;
+
   // the final camera, calculate the draw final dst rects
   ImageRect *dst_rect = &n4_dst_rects[0];
   dst_rect->x = 0;
