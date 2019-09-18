@@ -198,7 +198,7 @@ int N4DataFlow::StreamOn(int index) {
     PARAM_STRING_APPEND(param, KEY_NAME, filter_name);
     // PARAM_STRING_APPEND(param, KEK_THREAD_SYNC_MODEL, KEY_ASYNCCOMMON);
     PARAM_STRING_APPEND_TO(param, KEY_FPS, drm_fps);
-    PixelFormat rga_out_pix_fmt = GetPixFmtByString(rga_out_data_type.c_str());
+    PixelFormat rga_out_pix_fmt = StringToPixFmt(rga_out_data_type.c_str());
     ImageInfo out_img_info = {rga_out_pix_fmt, drm_w, drm_h, drm_w, drm_h};
     PARAM_STRING_APPEND(param, KEY_INPUTDATATYPE, rga_in_data_type);
     param.append(easymedia::to_param_string(out_img_info, false));
